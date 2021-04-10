@@ -1,0 +1,11 @@
+{
+  "server":["0.0.0.0"],
+  "port_password": {
+        "8848": "Nvbv9d@883n^#nD00vs>kkcdmND",
+        "8838": "vLfjeu@^uuvbsSCVscscSgvv"
+  },
+  "timeout":60,
+  "method":"chacha20-ietf-poly1305",
+  "fast_open":true,
+  "mode": "tcp_and_udp"
+}

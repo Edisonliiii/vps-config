@@ -1,0 +1,20 @@
+version: '3.5'
+services:
+  ss-normal:
+    image: ss-base
+    restart: always
+    ports:
+      - "8848:8848"
+      - "8838:8838"
+    volumes:
+      - '$PWD:/etc/shadowsocks-libev/:ro'
+    command: ss-manager --manager-address /var/run/shadowsocks-manager.sock -c /etc/shadowsocks-libev/conf-vanilla.json
+  ss-obfs:
+    image: ss-base
+    restart: always
+    ports:
+      - "10728:10728"
+      - "10738:10738"
+    volumes:
+      - '$PWD:/etc/shadowsocks-libev/:ro'
+    command: ss-manager --manager-address /var/run/shadowsocks-manager.sock -c /etc/shadowsocks-libev/conf-obfs.json
