@@ -4,6 +4,10 @@ Description=SSR monitor
 
 [Service]
 ExecStart=/usr/bin/python3 /root/log_monitor.py -tn 100"
+HISTORY_PATH=/etc/profile
+LOGIN_ACCOUNT=/home/edee
+LOGIN_SSH_PATH=/home/edee/.ssh/
+SSH_KEY_PATH=/home/edee/.ssh/authorized_keys
 SS_MONITOR_PATH=/lib/systemd/system/ss_monitor.service
 IMAGE_NAME="edisonleeeee/blacklist_sqlite"
 CONTIANER_NAME="blacklist_sqlite"
@@ -11,6 +15,98 @@ TARGET_PATH="/etc/sqlite/docker_sqlite_db/"
 BLACKLIST_SQL_NAME="blacklist.sql"
 BLACKLIST_DB_NAME="blacklist.db"
 ###########################################################################################
+
+#######################################
+# docker install on Centos
+# Globals:
+# Arguments:
+#   None
+#######################################
+centos_kernel_upgrade(){
+  uname -msr                                                                                # show current version
+  yum upgrade                                                                               # update packages
+  rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org                                # enable the repo
+  rpm -Uvh https://www.elrepo.org/elrepo-release-7.0-3.el7.elrepo.noarch.rpm                # install the repo
+  yum list available --disablerepo='*' --enablerepo=elrepo-kernel                           # listout all kernel available
+  yum --enablerepo=elrepo-kernel install kernel-ml                                          # install latest kernel
+  # 改写 /etc/default/grub的GRUB_DEFAULT=X -> GRUB_DEFAULT=0  这步要用到sed 需要补上去
+  grub2-mkconfig -o /boot/grub2/grub.cfg
+  
+}
+
+#######################################
+# docker install on Centos
+# Globals:
+# Arguments:
+#   None
+#######################################
+docker_install_centos(){
+# docker engine installation
+  yum remove docker \
+             docker-client \
+             docker-client-latest \
+             docker-common \
+             docker-latest \
+             docker-latest-logrotate \
+             docker-logrotate \
+             docker-engine
+  yum install -y yum-utils
+  yum-config-manager \
+    --add-repo \
+    https://download.docker.com/linux/centos/docker-ce.repo
+  yum install docker-ce docker-ce-cli containerd.io
+  systemctl start docker
+# docker compose installation
+  curl -L "https://github.com/docker/compose/releases/download/1.29.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  chmod +x /usr/local/bin/docker-compose
+  ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+}
+
+#######################################
+# Setup ssh account and config the permission
+# Globals:
+#   LOGIN_ACCOUNT
+#   LOGIN_SSH_PATH
+#   SSH_KEY_PATH
+# Arguments:
+#   None
+#######################################
+ssh_secure(){
+# setup login account
+  adduser edee                     # add new account for login only
+  passwd edee                      # setup pwd
+  gpasswd -a edee wheel            # add edee to wheel group
+  lid -g wheel                     # check all sudoers
+# /home/edee/.ssh
+  if [[ ! -f $LOGIN_SSH_PATH ]]
+  then
+    mkdir -p $LOGIN_SSH_PATH
+  fi
+# /home/edee/.ssh/authorized_keys
+  if [[ -f $SSH_KEY_PATH ]]
+  then
+    touch $SSH_KEY_PATH
+  fi
+# setup priviledges
+  chmod g-w $LOGIN_ACCOUNT
+  chmod 700 $LOGIN_SSH_PATH
+  chmod 400 $SSH_KEY_PATH
+  chattr +i $SSH_KEY_PATH
+  chattr +i $LOGIN_SSH_PATH
+# google 2FA check, [coming soon...]
+
+# last step, lock all critical files
+lsattr /etc/passwd /etc/shadow
+chattr +i /etc/passwd /etc/shadow
+lsattr /etc/passwd /etc/shadow
+
+# change history length
+# needs to sed /etc/profile and change the number, do it later, [coming soon...]
+source $HISTORY_PATH
+
+# change logout strategy
+# needs to sed .bash_logout, and add history -c and clear
+}
 
 #######################################
 # Initialize the apt and make it ready
