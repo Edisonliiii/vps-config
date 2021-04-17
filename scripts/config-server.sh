@@ -9,7 +9,7 @@ LOGIN_ACCOUNT=/home/edee
 LOGIN_SSH_PATH=/home/edee/.ssh/
 SSH_KEY_PATH=/home/edee/.ssh/authorized_keys
 SS_MONITOR_PATH=/lib/systemd/system/ss_monitor.service
-IMAGE_NAME="edisonleeeee/blacklist_sqlite"
+BLACKLIST_IMAGE_NAME="edisonleeeee/blacklist_sqlite"
 CONTIANER_NAME="blacklist_sqlite"
 TARGET_PATH="/etc/sqlite/docker_sqlite_db/"
 BLACKLIST_SQL_NAME="blacklist.sql"
@@ -31,7 +31,6 @@ centos_kernel_upgrade(){
   yum --enablerepo=elrepo-kernel install kernel-ml                                          # install latest kernel
   # 改写 /etc/default/grub的GRUB_DEFAULT=X -> GRUB_DEFAULT=0  这步要用到sed 需要补上去
   grub2-mkconfig -o /boot/grub2/grub.cfg
-  
 }
 
 #######################################
@@ -93,16 +92,17 @@ ssh_secure(){
   chmod 400 $SSH_KEY_PATH
   chattr +i $SSH_KEY_PATH
   chattr +i $LOGIN_SSH_PATH
+
 # google 2FA check, [coming soon...]
 
 # last step, lock all critical files
-lsattr /etc/passwd /etc/shadow
-chattr +i /etc/passwd /etc/shadow
-lsattr /etc/passwd /etc/shadow
+  lsattr /etc/passwd /etc/shadow
+  chattr +i /etc/passwd /etc/shadow
+  lsattr /etc/passwd /etc/shadow
 
 # change history length
 # needs to sed /etc/profile and change the number, do it later, [coming soon...]
-source $HISTORY_PATH
+  source $HISTORY_PATH
 
 # change logout strategy
 # needs to sed .bash_logout, and add history -c and clear
@@ -128,23 +128,31 @@ apt_init(){
 #   systemctl application name
 #######################################
 run_systemctl_app(){
-  systemctl start $1
+  echo "Starting service $1"
+  if [[ "$1" == "ufw.service" ]];
+  then
+    ufw enable
+  else
+    systemctl start $1
+  fi
 }
 
 #######################################
 # Run blacklist_sqlite image
 # Globals:
-#   IMAGE_NAME
+#   BLACKLIST_IMAGE_NAME
 # Arguments:
 #   1 -- systemctl (command checked)
-#   2 -- systemd   (install if not exist)
+#   2 -- systemd   (installation list if not exist)
+# eg: if there is no systemctl, then you need to install
+#     systemd
 #######################################
 check_command_existence(){
-  if ! command -v $1 &> /dev/null
+  if [ ! command -v $1 &> /dev/null ] || [ ! -f /usr/sbin/$1 ];
   then
       shift
       echo "$1 could not be found"
-      echo "Installing systemd..."
+      echo "Installing command $1..."
       if ! apt install "$@"
       then
         echo "apt install error, quit!"
@@ -176,6 +184,7 @@ make_ss_monitor_systemctl(){
     echo "Finish creating service file!"
   fi
   echo "$SS_MONITOR_SCRIPT" > $SS_MONITOR_PATH
+  systemctl daemon-reload
   echo "SS_MONITOR has been added to systemctl!"
   echo "Locating at $SS_MONITOR_PATH"
   # run
@@ -188,7 +197,7 @@ make_ss_monitor_systemctl(){
 #######################################
 # Run blacklist_sqlite container
 # Globals:
-#   IMAGE_NAME
+#   BLACKLIST_IMAGE_NAME
 # Arguments:
 #   None
 #   a. path to blacklist.sql
@@ -204,16 +213,16 @@ make_ss_monitor_systemctl(){
 #######################################
 run_blacklist_sqlite_container(){
 # check existence of docker image
-  if [[ "$(docker images -q $IMAGE_NAME 2> /dev/null)" == "" ]];
+  if [[ "$(docker images -q $BLACKLIST_IMAGE_NAME 2> /dev/null)" == "" ]];
   then
-    echo "Downloading image $IMAGE_NAME..."
-    docker pull $IMAGE_NAME
+    echo "Downloading image $BLACKLIST_IMAGE_NAME..."
+    docker pull $BLACKLIST_IMAGE_NAME
     echo "Finish downloading the image!"
   fi
 # prepare all necessary files
   mkdir -p $TARGET_PATH
   mkdir -p $TARGET_PATH/scripts
-  cp ../firewall/log_monitor.py    /root/log_monitor.py
+  cp ../firewall/log_monitor.py /root/log_monitor.py
   # install all requirements
   #if [ ! apt install python3-pip ] || [ ! pip3 install pyufw ] || [ ! pip3 install docker ];
   #then
@@ -253,7 +262,6 @@ run_blacklist_sqlite_container(){
              869b76e60d2a
 }
 
-
 #######################################
 # Completly harmless to cleanup docker container [?]
 # Globals:
@@ -263,13 +271,11 @@ run_blacklist_sqlite_container(){
 #######################################
 cleanup(){
   docker stop $CONTIANER_NAME
-  docker rm $CONTIANER_NAME
+  docker rm   $CONTIANER_NAME
 }
 
 ###########################################################################################
-###########################################################################################
-###########################################################################################
-###########################################################################################
+#-----------MAIN PART
 
 apt_init
 check_command_existence systemctl systemd
@@ -279,4 +285,5 @@ run_systemctl_app docker
 make_ss_monitor_systemctl
 
 run_blacklist_sqlite_container
+run_systemctl_app ufw.service
 run_systemctl_app ss_monitor.service
