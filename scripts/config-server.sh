@@ -1,20 +1,71 @@
 #############################################Global variables##############################
-SS_MONITOR_SCRIPT="[Unit]
+readonly SS_MONITOR_SCRIPT="[Unit]
 Description=SSR monitor
 
 [Service]
 ExecStart=/usr/bin/python3 /root/log_monitor.py -tn 100"
-HISTORY_PATH=/etc/profile
-LOGIN_ACCOUNT=/home/edee
-LOGIN_SSH_PATH=/home/edee/.ssh/
-SSH_KEY_PATH=/home/edee/.ssh/authorized_keys
-SS_MONITOR_PATH=/lib/systemd/system/ss_monitor.service
-BLACKLIST_IMAGE_NAME="edisonleeeee/blacklist_sqlite"
-CONTIANER_NAME="blacklist_sqlite"
-TARGET_PATH="/etc/sqlite/docker_sqlite_db/"
-BLACKLIST_SQL_NAME="blacklist.sql"
-BLACKLIST_DB_NAME="blacklist.db"
+readonly SELF_DEFINED_COMMENT="#########-------"
+readonly FUNC_NAME=${FUNCNAME[0]}
+readonly HISTORY_PATH=/etc/profile
+readonly LOGIN_ACCOUNT=/home/edee
+readonly LOGIN_SSH_PATH=/home/edee/.ssh/
+readonly SSH_KEY_PATH=/home/edee/.ssh/authorized_keys
+readonly SS_MONITOR_PATH=/lib/systemd/system/ss_monitor.service
+readonly BLACKLIST_IMAGE_NAME="edisonleeeee/blacklist_sqlite"
+readonly CONTIANER_NAME="blacklist_sqlite"
+readonly TARGET_PATH="/etc/sqlite/docker_sqlite_db/"
+readonly BLACKLIST_SQL_NAME="blacklist.sql"
+readonly BLACKLIST_DB_NAME="blacklist.db"
+readonly ufw_BIN_PATH="/usr/sbin/"
+readonly NORMAL_BIN_PATH="/usr/bin/"
+declare -A commandN_to_installN=( ["docker"]="docker" \
+	                              ["systemctl"]="systemd" \
+	                              ["ufw"]="ufw")
+# waiting for runtime init, global writable
+PACKAGE_MANAGER=""                                   # yum or apt
+OS_NAME=""                                           # centos/ubuntu
+
 ###########################################################################################
+
+###########################################################################################
+# Utility Functions
+#######################################
+# Return the name of running funciton
+# Globals:
+# Arguments:
+#   None
+#######################################
+function func_prologue(){
+  echo "--------------------------------------------"
+  echo $1
+  echo "Installing command $2"
+  echo "--------------------------------------------"
+}
+
+###########################################################################################
+#######################################
+# check OS and config essential variables
+# Globals:
+#   PACKAGE_MANAGER
+#   OS_NAME
+# Arguments:
+#   None
+#######################################
+function os_checker(){
+  read_os_info="$(grep "^NAME" $"/etc/os-release" | awk -F'"' '{print $2}')"
+  if [[ "$read_os_info" == "Ubuntu" ]];
+  then
+  	# ubuntu
+  	echo "$read_os_info system!"
+    PACKAGE_MANAGER="apt"
+    OS_NAME="ubuntu"
+  else
+  	# centos
+  	echo "$read_os_info system!"
+    PACKAGE_MANAGER="yum"
+    OS_NAME="centos"
+  fi
+}
 
 #######################################
 # docker install on Centos
@@ -22,7 +73,7 @@ BLACKLIST_DB_NAME="blacklist.db"
 # Arguments:
 #   None
 #######################################
-centos_kernel_upgrade(){
+function kernel_upgrade_centos(){
   uname -msr                                                                                # show current version
   yum upgrade                                                                               # update packages
   rpm --import https://www.elrepo.org/RPM-GPG-KEY-elrepo.org                                # enable the repo
@@ -39,7 +90,7 @@ centos_kernel_upgrade(){
 # Arguments:
 #   None
 #######################################
-docker_install_centos(){
+function install_docker_centos(){
 # docker engine installation
   yum remove docker \
              docker-client \
@@ -62,6 +113,44 @@ docker_install_centos(){
 }
 
 #######################################
+# ufw install on Centos
+# Globals:
+# Arguments:
+#   None
+#######################################
+function install_ufw_centos(){
+  yum install epel-release
+  yum install ufw
+}
+
+#######################################
+# docker install on Ubuntu
+# Globals:
+# Arguments:
+#   None
+#######################################
+function install_docker_ubuntu(){
+# clean the prev installation
+  apt-get remove docker docker-engine docker.io containerd runc
+# docker engine installation
+  apt-get install \
+      apt-transport-https \
+      ca-certificates \
+      curl \
+      gnupg \
+      lsb-release
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  echo \
+  "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+  apt-get install docker-ce docker-ce-cli containerd.io
+# docker compose installation
+  curl -L "https://github.com/docker/compose/releases/download/1.29.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+  chmod +x /usr/local/bin/docker-compose
+  ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
+}
+
+#######################################
 # Setup ssh account and config the permission
 # Globals:
 #   LOGIN_ACCOUNT
@@ -70,7 +159,7 @@ docker_install_centos(){
 # Arguments:
 #   None
 #######################################
-ssh_secure(){
+function ssh_secure(){
 # setup login account
   adduser edee                     # add new account for login only
   passwd edee                      # setup pwd
@@ -109,15 +198,15 @@ ssh_secure(){
 }
 
 #######################################
-# Initialize the apt and make it ready
+# Initialize the apt/yum and make it ready
 # Globals:
 #   None
 # Arguments:
 #   None
 #######################################
-apt_init(){
-  apt update
-  apt upgrade
+function package_manager_init(){
+  $PACKAGE_MANAGER update
+  $PACKAGE_MANAGER upgrade
 }
 
 #######################################
@@ -127,7 +216,7 @@ apt_init(){
 # Arguments:
 #   systemctl application name
 #######################################
-run_systemctl_app(){
+function run_systemctl_app(){
   echo "Starting service $1"
   if [[ "$1" == "ufw.service" ]];
   then
@@ -141,26 +230,52 @@ run_systemctl_app(){
 # Run blacklist_sqlite image
 # Globals:
 #   BLACKLIST_IMAGE_NAME
+#   PACKAGE_MANAGER
 # Arguments:
 #   1 -- systemctl (command checked)
 #   2 -- systemd   (installation list if not exist)
 # eg: if there is no systemctl, then you need to install
 #     systemd
 #######################################
-check_command_existence(){
-  if [ ! command -v $1 &> /dev/null ] || [ ! -f /usr/sbin/$1 ];
+function check_command_existence(){
+  func_prologue ${FUNCNAME[0]} $1
+  installer="install_"
+  command_name=$1
+  command_bin_path=""
+
+  # [TODO] 这部分逻辑必须改掉！
+  if [[ $command_name == "ufw" ]];
   then
-      shift
-      echo "$1 could not be found"
-      echo "Installing command $1..."
-      if ! apt install "$@"
+    command_bin_path="$1_BIN_PATH"             # command_bin_path本身是一个变量名 想让其生效必须${!command_bin_path}
+  else
+    command_bin_path="NORMAL_BIN_PATH"
+  fi
+  
+  if [ ! command -v $1 &> /dev/null ] || [ ! -f ${!command_bin_path}$1 ];
+  then # command doesn't exist
+    #shift   # [Caution!] drop one arg
+    echo "$1 could not be found"
+    echo "Installing command $1..."
+    shift
+    if ! $PACKAGE_MANAGER install "$@";
+    then
+      echo "$PACKAGE_MANAGER install error, alter to specific installer!"
+      installer+="${commandN_to_installN[$command_name]}"
+      installer+="_"
+      installer+="$OS_NAME"
+      if ! $installer;                                        # here, should never use [[]], or will never literally run it
       then
-        echo "apt install error, quit!"
+        echo "Installation crapped! Abort!"
         exit 0
       else
-        echo "apt installing...."
+        echo "Successful!"
       fi
-      echo "Done!!!"
+    else
+      echo "$PACKAGE_MANAGER installing...."
+    fi
+    echo "Done!!!"
+  else
+    echo "$SELF_DEFINED_COMMENT $1 already exits! Ready to use!"
   fi
 }
 
@@ -173,7 +288,7 @@ check_command_existence(){
 # Arguments:
 #   None
 #######################################
-make_ss_monitor_systemctl(){
+function make_ss_monitor_systemctl(){
   # config
   if [[ -f $SS_MONITOR_PATH ]]
   then
@@ -211,7 +326,7 @@ make_ss_monitor_systemctl(){
 # 当前版本必须在这个bash文件同目录下存在一个docker-entrypoint.sh
 # 后续版本中要把这个路径问题解决 从Dockerfile_sqlite统一路径  
 #######################################
-run_blacklist_sqlite_container(){
+function run_blacklist_sqlite_container(){
 # check existence of docker image
   if [[ "$(docker images -q $BLACKLIST_IMAGE_NAME 2> /dev/null)" == "" ]];
   then
@@ -269,21 +384,24 @@ run_blacklist_sqlite_container(){
 # Arguments:
 # Necessary Files:
 #######################################
-cleanup(){
+function cleanup(){
   docker stop $CONTIANER_NAME
   docker rm   $CONTIANER_NAME
 }
 
 ###########################################################################################
-#-----------MAIN PART
+#-----------MAIN PART (ubuntu supported currently)
 
-apt_init
+# env setup
+os_checker
+package_manager_init
 check_command_existence systemctl systemd
 check_command_existence docker docker.io
 check_command_existence ufw ufw
 run_systemctl_app docker
 make_ss_monitor_systemctl
 
-run_blacklist_sqlite_container
-run_systemctl_app ufw.service
-run_systemctl_app ss_monitor.service
+# run services orchestration
+#run_blacklist_sqlite_container
+#run_systemctl_app ufw.service
+#run_systemctl_app ss_monitor.service

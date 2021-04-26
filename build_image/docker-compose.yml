@@ -20,7 +20,9 @@ services:
   ss-obfs:
     image: edisonleeeee/ss-base:latest
     restart: always
-    network: host
+    stdin_open: true
+    tty: true
+    network_mode: host
     ports:
       - "10728:10728"
       - "10738:10738"

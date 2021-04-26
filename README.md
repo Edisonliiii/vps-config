@@ -36,16 +36,18 @@ docker-compose: 镜像名必须完整 repo/image:tag
 - 端口随机化 + 数据可视化
 - optimize Dockerfile
 - alpine 镜像内核性能优化
-- ufw 镜像级防护                  [check]
+- ufw 镜像级防护 ubuntu                                                         [环境部署阶段check]
+- ufw 镜像级防护 centos                                                         [环境部署阶段check]
 - ufw 云防火墙
 - 自动生成二维码
 - 输入想要的配置文件个数 以及每个配置文件需要几个
-- docker-composer同一镜像启动多个ss-server会造成无法输出日志的问题！！！！！！！！！
+- docker-composer同一镜像启动多个ss-server会造成无法输出日志的问题！！！！！！！！！     [solved需要在yml中加入 stdin_open: true; tty: true]
 - 加一个二层vpn解决netflix/邮箱之类的问题
+- yum + apt support
 
 
 
 3. 当前进度
 - ubuntu界面本地ufw端口级别ss防护一键部署       [check tested]
 - ssh安全加固                               [check ]
-- kernel更新                                [check ]
+- kernel更新                               [check ]
