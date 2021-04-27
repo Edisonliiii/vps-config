@@ -4,23 +4,37 @@ Description=SSR monitor
 
 [Service]
 ExecStart=/usr/bin/python3 /root/log_monitor.py -tn 100"
-readonly SELF_DEFINED_COMMENT="#########-------"
+readonly SELF_DEFINED_COMMENT="#########"
 readonly FUNC_NAME=${FUNCNAME[0]}
 readonly HISTORY_PATH=/etc/profile
-readonly LOGIN_ACCOUNT=/home/edee
+readonly LOGIN_ACCOUNT=/home/edee                        # 所有的edee记得都替换掉
 readonly LOGIN_SSH_PATH=/home/edee/.ssh/
 readonly SSH_KEY_PATH=/home/edee/.ssh/authorized_keys
 readonly SS_MONITOR_PATH=/lib/systemd/system/ss_monitor.service
 readonly BLACKLIST_IMAGE_NAME="edisonleeeee/blacklist_sqlite"
-readonly CONTIANER_NAME="blacklist_sqlite"
 readonly TARGET_PATH="/etc/sqlite/docker_sqlite_db/"
 readonly BLACKLIST_SQL_NAME="blacklist.sql"
 readonly BLACKLIST_DB_NAME="blacklist.db"
 readonly ufw_BIN_PATH="/usr/sbin/"
 readonly NORMAL_BIN_PATH="/usr/bin/"
+readonly BLACKLIST_SQL_URL="https://www.dropbox.com/s/p41z5f74nej74xf/blacklist.sql"
+readonly BLACKLIST_DB_URL="https://www.dropbox.com/s/a3phjz1s2ot49s1/blacklist.db"
+readonly LOG_MONITOR_URL="https://www.dropbox.com/s/flcbt4fzmcg8wcw/log_monitor.py"
+readonly DOCKER_ENTRYPOINT_URL="https://www.dropbox.com/s/6bu93kcm2c82zts/docker-entrypoint.sh"
+
+# docker container
+readonly BLACKLIST_CONTIANER_NAME="edisonleeeee/blacklist_sqlite"
+
+# debug output
+readonly STATUS_LINE="[Status]:"
+
+# used to concatenate into a string used as the function name
+# key                  -      value
+# [Command in shell]   -      [Call name as part of the function name]
 declare -A commandN_to_installN=( ["docker"]="docker" \
 	                              ["systemctl"]="systemd" \
 	                              ["ufw"]="ufw")
+
 # waiting for runtime init, global writable
 PACKAGE_MANAGER=""                                   # yum or apt
 OS_NAME=""                                           # centos/ubuntu
@@ -37,8 +51,11 @@ OS_NAME=""                                           # centos/ubuntu
 #######################################
 function func_prologue(){
   echo "--------------------------------------------"
-  echo $1
-  echo "Installing command $2"
+  echo "FUNCNAME: [$1]"
+  echo "Installing command: [$2]"
+}
+
+function func_postLogue(){
   echo "--------------------------------------------"
 }
 
@@ -56,12 +73,12 @@ function os_checker(){
   if [[ "$read_os_info" == "Ubuntu" ]];
   then
   	# ubuntu
-  	echo "$read_os_info system!"
+  	echo "[System Info]:$read_os_info"
     PACKAGE_MANAGER="apt"
     OS_NAME="ubuntu"
   else
   	# centos
-  	echo "$read_os_info system!"
+  	echo "[System Info]:$read_os_info"
     PACKAGE_MANAGER="yum"
     OS_NAME="centos"
   fi
@@ -205,7 +222,9 @@ function ssh_secure(){
 #   None
 #######################################
 function package_manager_init(){
+  echo "[Updating]..."
   $PACKAGE_MANAGER update
+  echo "[Upgrading]..."
   $PACKAGE_MANAGER upgrade
 }
 
@@ -259,24 +278,25 @@ function check_command_existence(){
     shift
     if ! $PACKAGE_MANAGER install "$@";
     then
-      echo "$PACKAGE_MANAGER install error, alter to specific installer!"
+      echo "[Status]: $PACKAGE_MANAGER install error, alter to specific installer!"
       installer+="${commandN_to_installN[$command_name]}"
       installer+="_"
       installer+="$OS_NAME"
       if ! $installer;                                        # here, should never use [[]], or will never literally run it
       then
-        echo "Installation crapped! Abort!"
+        echo "[Status]: Installation crapped! Abort!"
         exit 0
       else
-        echo "Successful!"
+        echo "[Status]: Successful!"
       fi
     else
-      echo "$PACKAGE_MANAGER installing...."
+      echo "[Status]: $PACKAGE_MANAGER installing...."
     fi
-    echo "Done!!!"
+    echo "[Status]: Done!!!"
   else
-    echo "$SELF_DEFINED_COMMENT $1 already exits! Ready to use!"
+    echo "[Status]: $1 already exits! Ready to use!"
   fi
+  func_postLogue
 }
 
 #######################################
@@ -337,35 +357,39 @@ function run_blacklist_sqlite_container(){
 # prepare all necessary files
   mkdir -p $TARGET_PATH
   mkdir -p $TARGET_PATH/scripts
-  cp ../firewall/log_monitor.py /root/log_monitor.py
+  curl -L  $LOG_MONITOR_URL > /root/log_monitor.py
   # install all requirements
   #if [ ! apt install python3-pip ] || [ ! pip3 install pyufw ] || [ ! pip3 install docker ];
   #then
   #  echo "run_blacklist_sqlite_container abort!"
   #  exit 0
   #fi
-  apt install python3-pip
+  if ! $PACKAGE_MANAGER install python3-pip;
+  then
+    echo "$STATUS_LINE python3-pip install fail! Exit!"
+    exit 1
+  fi
   pip3 install pyufw
   pip3 install docker
-  cp ../db/docker_db/blacklist.sql $TARGET_PATH/blacklist.sql
-  cp ../db/docker_db/blacklist.db  $TARGET_PATH/blacklist.db
-  cp ./docker-entrypoint.sh        $TARGET_PATH/scripts/docker-entrypoint.sh
+  curl -L $BLACKLIST_SQL_URL > $TARGET_PATH/blacklist.sql
+  curl -L $BLACKLIST_DB_URL > $TARGET_PATH/blacklist.db
+  curl -L $DOCKER_ENTRYPOINT_URL > $TARGET_PATH/scripts/docker-entrypoint.sh
 # check existence of blacklist sql file
   if [ ! -f $TARGET_PATH/blacklist.sql ];
   then
-    echo "blacklist.sql not found!"
+    echo "$STATUS_LINE blacklist.sql not found!"
     exit 1
   fi
 # check existence of blacklist db file
   if [ ! -f $TARGET_PATH/blacklist.db ];
   then
-    echo "blacklist.db not found!"
+    echo "$STATUS_LINE blacklist.db not found!"
     exit 1
   fi
 # check existence of docker-entrypoint.sh
   if [ ! -f $TARGET_PATH/scripts/docker-entrypoint.sh ];
   then
-    echo "docker-entrypoint.sh not found!"
+    echo "$STATUS_LINE docker-entrypoint.sh not found!"
     exit 1
   fi
 # run docker image
@@ -374,25 +398,29 @@ function run_blacklist_sqlite_container(){
              --name blacklist_sqlite \
              -v $TARGET_PATH/blacklist.sql:/etc/sqlite/docker_sqlite_db/blacklist.sql \
              -v $TARGET_PATH/blacklist.db:/etc/sqlite/docker_sqlite_db/blacklist.db \
-             869b76e60d2a
+             $BLACKLIST_CONTIANER_NAME
+  echo "$STATUS_LINE Blacklist Container is successfully running!"
 }
 
 #######################################
 # Completly harmless to cleanup docker container [?]
 # Globals:
-#   $CONTAINER_NAME
+#   $DOCKER_BL_CONTAINER_NAME
 # Arguments:
 # Necessary Files:
 #######################################
 function cleanup(){
-  docker stop $CONTIANER_NAME
-  docker rm   $CONTIANER_NAME
+  docker stop $BLACKLIST_CONTIANER_NAME
+  docker rm   $BLACKLIST_CONTIANER_NAME
 }
 
 ###########################################################################################
 #-----------MAIN PART (ubuntu supported currently)
 
 # env setup
+echo "Setting up the essential environment ..........."
+echo "|"
+echo "|"
 os_checker
 package_manager_init
 check_command_existence systemctl systemd
@@ -401,7 +429,10 @@ check_command_existence ufw ufw
 run_systemctl_app docker
 make_ss_monitor_systemctl
 
+echo "About to initiate the services ........."
+echo "|"
+echo "|"
 # run services orchestration
-#run_blacklist_sqlite_container
-#run_systemctl_app ufw.service
-#run_systemctl_app ss_monitor.service
+run_blacklist_sqlite_container
+run_systemctl_app ufw.service
+run_systemctl_app ss_monitor.service
