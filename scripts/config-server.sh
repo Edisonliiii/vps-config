@@ -6,21 +6,23 @@ Description=SSR monitor
 ExecStart=/usr/bin/python3 /root/log_monitor.py -tn 100"
 readonly SELF_DEFINED_COMMENT="#########"
 readonly FUNC_NAME=${FUNCNAME[0]}
-readonly HISTORY_PATH=/etc/profile
-readonly LOGIN_ACCOUNT=/home/edee                        # 所有的edee记得都替换掉
-readonly LOGIN_SSH_PATH=/home/edee/.ssh/
-readonly SSH_KEY_PATH=/home/edee/.ssh/authorized_keys
-readonly SS_MONITOR_PATH=/lib/systemd/system/ss_monitor.service
 readonly BLACKLIST_IMAGE_NAME="edisonleeeee/blacklist_sqlite"
-readonly TARGET_PATH="/etc/sqlite/docker_sqlite_db/"
 readonly BLACKLIST_SQL_NAME="blacklist.sql"
 readonly BLACKLIST_DB_NAME="blacklist.db"
-readonly ufw_BIN_PATH="/usr/sbin/"
-readonly NORMAL_BIN_PATH="/usr/bin/"
+
+
 readonly BLACKLIST_SQL_URL="https://www.dropbox.com/s/p41z5f74nej74xf/blacklist.sql"
 readonly BLACKLIST_DB_URL="https://www.dropbox.com/s/a3phjz1s2ot49s1/blacklist.db"
 readonly LOG_MONITOR_URL="https://www.dropbox.com/s/flcbt4fzmcg8wcw/log_monitor.py"
 readonly DOCKER_ENTRYPOINT_URL="https://www.dropbox.com/s/6bu93kcm2c82zts/docker-entrypoint.sh"
+readonly SSH_CONFIG_URL="https://www.dropbox.com/s/o27blst30pbncyj/sshd_config"
+
+readonly HISTORY_PATH=/etc/profile
+readonly SS_MONITOR_PATH=/lib/systemd/system/ss_monitor.service
+readonly TARGET_PATH=/etc/sqlite/docker_sqlite_db/
+readonly ufw_BIN_PATH=/usr/sbin/
+readonly NORMAL_BIN_PATH=/usr/bin/
+readonly SSH_CONFIG_PATH=/etc/ssh/sshd_config
 
 # docker container
 readonly BLACKLIST_CONTIANER_NAME="edisonleeeee/blacklist_sqlite"
@@ -33,18 +35,27 @@ readonly STATUS_LINE="[Status]:"
 # [Command in shell]   -      [Call name as part of the function name]
 declare -A commandN_to_installN=( ["docker"]="docker" \
 	                              ["systemctl"]="systemd" \
-	                              ["ufw"]="ufw")
+	                              ["ufw"]="ufw" \
+	                              ["passwd"]="passwd" \
+	                              ["ssh"]="openssh-server openssh-clients" \
+	                              ["chattr"]="e2fsprogs"
+	                            )
 
 # waiting for runtime init, global writable
 PACKAGE_MANAGER=""                                   # yum or apt
 OS_NAME=""                                           # centos/ubuntu
+SSH_ACCOUNT_NAME=""
+LOGIN_ACCOUNT=""                                     # 所有的edee记得都替换掉
+LOGIN_SSH_PATH=""
+SSH_KEY_PATH=""
 
 ###########################################################################################
 
 ###########################################################################################
+
 # Utility Functions
 #######################################
-# Return the name of running funciton
+# Function formation handler
 # Globals:
 # Arguments:
 #   None
@@ -58,8 +69,8 @@ function func_prologue(){
 function func_postLogue(){
   echo "--------------------------------------------"
 }
-
 ###########################################################################################
+
 #######################################
 # check OS and config essential variables
 # Globals:
@@ -178,33 +189,55 @@ function install_docker_ubuntu(){
 #######################################
 function ssh_secure(){
 # setup login account
-  adduser edee                     # add new account for login only
-  passwd edee                      # setup pwd
-  gpasswd -a edee wheel            # add edee to wheel group
-  lid -g wheel                     # check all sudoers
+  echo "Creating ssh login hole........"
+  echo "Please input the login name you want and save as copy. Reminder: Recommand to setup this name as a password, don't forget to make a copy: "
+  read SSH_ACCOUNT_NAME
+  adduser -m $SSH_ACCOUNT_NAME                     # add new account for login only
+  # init essential paths
+  LOGIN_ACCOUNT=/home/$SSH_ACCOUNT_NAME
+  LOGIN_SSH_PATH=/home/$SSH_ACCOUNT_NAME/.ssh/
+  SSH_KEY_PATH=/home/$SSH_ACCOUNT_NAME/.ssh/authorized_keys
+  echo "Setting up pwd........."
+  passwd $SSH_ACCOUNT_NAME                      # setup pwd
+  gpasswd -a $SSH_ACCOUNT_NAME wheel            # add edee to wheel group
+  lid -g wheel                                  # check all sudoers
+  echo "Done!"
 # /home/edee/.ssh
   if [[ ! -f $LOGIN_SSH_PATH ]]
   then
+  	echo "Creating $LOGIN_SSH_PATH......"
     mkdir -p $LOGIN_SSH_PATH
+    echo "Done!"
   fi
 # /home/edee/.ssh/authorized_keys
-  if [[ -f $SSH_KEY_PATH ]]
+  if [[ ! -f "$SSH_KEY_PATH" ]]
   then
+  	echo "Creating $SSH_KEY_PATH......."
     touch $SSH_KEY_PATH
+    echo "Done!"
   fi
 # setup priviledges
-  chmod g-w $LOGIN_ACCOUNT
-  chmod 700 $LOGIN_SSH_PATH
-  chmod 400 $SSH_KEY_PATH
-  chattr +i $SSH_KEY_PATH
-  chattr +i $LOGIN_SSH_PATH
+#  chmod g-w $LOGIN_ACCOUNT
+#  chmod 700 $LOGIN_SSH_PATH
+#  chmod 400 $SSH_KEY_PATH
+#  chattr +i $SSH_KEY_PATH
+#  chattr +i $LOGIN_SSH_PATH
+
+# public key login
+# rm -f $SSH_CONFIG_PATH
+curl -L $SSH_CONFIG_URL > $SSH_CONFIG_PATH
+sed -i "s/\b[LOGINNAME]\b/$SSH_ACCOUNT_NAME/g" "$SSH_CONFIG_PATH"    # has to be double quotes
+systemctl restart sshd
+
+
+
 
 # google 2FA check, [coming soon...]
 
 # last step, lock all critical files
-  lsattr /etc/passwd /etc/shadow
-  chattr +i /etc/passwd /etc/shadow
-  lsattr /etc/passwd /etc/shadow
+#  lsattr /etc/passwd /etc/shadow
+#  chattr +i /etc/passwd /etc/shadow
+#  lsattr /etc/passwd /etc/shadow
 
 # change history length
 # needs to sed /etc/profile and change the number, do it later, [coming soon...]
@@ -276,7 +309,7 @@ function check_command_existence(){
     echo "$1 could not be found"
     echo "Installing command $1..."
     shift
-    if ! $PACKAGE_MANAGER install "$@";
+    if ! $PACKAGE_MANAGER install ${commandN_to_installN[$command_name]};
     then
       echo "[Status]: $PACKAGE_MANAGER install error, alter to specific installer!"
       installer+="${commandN_to_installN[$command_name]}"
@@ -416,23 +449,29 @@ function cleanup(){
 
 ###########################################################################################
 #-----------MAIN PART (ubuntu supported currently)
-
-# env setup
-echo "Setting up the essential environment ..........."
-echo "|"
-echo "|"
+# preparation
 os_checker
 package_manager_init
-check_command_existence systemctl systemd
-check_command_existence docker docker.io
-check_command_existence ufw ufw
-run_systemctl_app docker
-make_ss_monitor_systemctl
+# security audition
+check_command_existence passwd
+check_command_existence ssh
+check_command_existence chattr
+ssh_secure
 
-echo "About to initiate the services ........."
-echo "|"
-echo "|"
+# env setup
+#echo "Setting up the essential environment ..........."
+#echo "|"
+#echo "|"
+#check_command_existence systemctl systemd
+#check_command_existence docker docker.io
+#check_command_existence ufw ufw
+#run_systemctl_app docker
+#make_ss_monitor_systemctl
+
 # run services orchestration
-run_blacklist_sqlite_container
-run_systemctl_app ufw.service
-run_systemctl_app ss_monitor.service
+#echo "About to initiate the services ........."
+#echo "|"
+#echo "|"
+#run_blacklist_sqlite_container
+#run_systemctl_app ufw.service
+#run_systemctl_app ss_monitor.service

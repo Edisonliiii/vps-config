@@ -31,7 +31,8 @@ c. volume(src路径 其实也都一样)
 
 docker-compose: 镜像名必须完整 repo/image:tag
 
-2. 未来构想
+2. TODO list
+- CI/CD (circleci)
 - 参数化
 - 端口随机化 + 数据可视化
 - optimize Dockerfile

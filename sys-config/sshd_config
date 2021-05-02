@@ -56,7 +56,7 @@ PubkeyAuthentication yes
 
 # The default is to check both .ssh/authorized_keys and .ssh/authorized_keys2
 # but this is overridden so installations will only check .ssh/authorized_keys
-AuthorizedKeysFile	/home/edee/.ssh/authorized_keys
+AuthorizedKeysFile	/home/[LOGINNAME]/.ssh/authorized_keys
 
 #AuthorizedPrincipalsFile none
 
@@ -151,7 +151,7 @@ Subsystem	sftp	/usr/libexec/openssh/sftp-server
 #	AllowTcpForwarding no
 #	PermitTTY no
 #	ForceCommand cvs server
-AllowUsers edee
+AllowUsers [LOGINNAME]
 DenyUsers root
 PermitRootLogin no
 UseDNS no
