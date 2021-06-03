@@ -10,7 +10,6 @@ readonly BLACKLIST_IMAGE_NAME="edisonleeeee/blacklist_sqlite"
 readonly BLACKLIST_SQL_NAME="blacklist.sql"
 readonly BLACKLIST_DB_NAME="blacklist.db"
 
-
 readonly BLACKLIST_SQL_URL="https://www.dropbox.com/s/p41z5f74nej74xf/blacklist.sql"
 readonly BLACKLIST_DB_URL="https://www.dropbox.com/s/a3phjz1s2ot49s1/blacklist.db"
 readonly LOG_MONITOR_URL="https://www.dropbox.com/s/flcbt4fzmcg8wcw/log_monitor.py"

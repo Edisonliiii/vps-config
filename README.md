@@ -46,9 +46,10 @@ docker-compose: 镜像名必须完整 repo/image:tag
 - 加一个二层vpn解决netflix/邮箱之类的问题
 - yum + apt support
 
-
-
 3. 当前进度
 - ubuntu界面本地ufw端口级别ss防护一键部署       [check tested]
 - ssh安全加固                               [check ]
 - kernel更新                               [check ]
+
+4. Known Issues
+- chattr +i 之后 docker无法正常delete/stop container
