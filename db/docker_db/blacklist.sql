@@ -1,3 +1,0 @@
-CREATE TABLE IF NOT EXISTS BANNEDIP (
-  ip_addr           TEXT    UNIQUE
-);
