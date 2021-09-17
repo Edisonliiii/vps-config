@@ -1,0 +1,10 @@
+FROM alpine:3.13
+
+ADD ./scripts/docker-entrypoint.sh /
+RUN apk upgrade --update \
+    && apk add --no-cache --virtual .build-deps \
+       sqlite \
+    && rm -rf /var/cache/apk/* \
+    && mkdir -p /etc/sqlite/docker_sqlite_db/ \
+    && chmod +x /docker-entrypoint.sh
+CMD ["sh", "docker-entrypoint.sh", "&"]
