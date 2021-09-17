@@ -1,5 +1,5 @@
 **/.DS_Store
 **/.dockerignore
-./.cache
+./.cache/
 ./.bash_history
 ./.python_history
