@@ -15,6 +15,7 @@ readonly BLACKLIST_DB_URL="https://www.dropbox.com/s/a3phjz1s2ot49s1/blacklist.d
 readonly LOG_MONITOR_URL="https://www.dropbox.com/s/flcbt4fzmcg8wcw/log_monitor.py"
 readonly DOCKER_ENTRYPOINT_URL="https://www.dropbox.com/s/6bu93kcm2c82zts/docker-entrypoint.sh"
 readonly SSH_CONFIG_URL="https://www.dropbox.com/s/o27blst30pbncyj/sshd_config"
+readonly EPEL_RELEASE="https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
 
 readonly HISTORY_PATH=/etc/profile
 readonly SS_MONITOR_PATH=/lib/systemd/system/ss_monitor.service
@@ -452,6 +453,7 @@ function cleanup(){
 os_checker
 package_manager_init
 # security audition
+check_command_existence python3
 check_command_existence passwd
 check_command_existence ssh
 check_command_existence chattr
